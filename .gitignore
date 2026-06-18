@@ -1,0 +1,34 @@
+# Build output
+/build/
+/build-msvc/
+/build-vs/
+/out/
+
+# Local copied game assets
+/local_hl/
+
+# Visual Studio and CMake generated files
+/.vs/
+CMakeFiles/
+CMakeCache.txt
+cmake_install.cmake
+*.sln
+*.vcxproj
+*.vcxproj.filters
+*.vcxproj.user
+
+# Compiled artifacts
+*.exe
+*.dll
+*.lib
+*.obj
+*.pdb
+*.ilk
+*.idb
+*.exp
+
+# Editor and OS noise
+.DS_Store
+Thumbs.db
+*.swp
+*.tmp
