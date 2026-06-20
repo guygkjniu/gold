@@ -8,7 +8,9 @@
 #include "engine/SoundSystem.h"
 
 #include <cstdint>
+#include <optional>
 #include <string>
+#include <unordered_map>
 
 namespace goldsrc
 {
@@ -30,6 +32,9 @@ private:
     Renderer renderer_;
     Console console_;
     BspMap loadedMap_;
+    std::optional<Renderer::MapChangeRequest> pendingMapTransition_;
+    std::unordered_map<std::string, Renderer::MapRuntimeState> mapRuntimeStates_;
+    std::string currentMapName_;
     bool running_ = false;
     std::uint64_t frameNumber_ = 0;
 };

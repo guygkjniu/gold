@@ -1,5 +1,7 @@
 #include "engine/FileSystem.h"
 
+#include <iostream>
+
 namespace goldsrc
 {
 FileSystem::FileSystem(std::filesystem::path baseDirectory, std::filesystem::path gameName)
@@ -40,10 +42,12 @@ std::filesystem::path FileSystem::resolve(const std::filesystem::path& relativeP
     {
         if (std::filesystem::exists(candidate))
         {
+            std::cout << "[fs] resolve " << relativePath.string() << " -> " << candidate.string() << '\n';
             return candidate;
         }
     }
 
+    std::cout << "[fs] missing " << relativePath.string() << '\n';
     return {};
 }
 
@@ -51,6 +55,7 @@ std::filesystem::path FileSystem::resolveAssetPath(const std::filesystem::path& 
 {
     if (assetPath.is_absolute() && std::filesystem::exists(assetPath))
     {
+        std::cout << "[fs] resolve asset " << assetPath.string() << " -> " << assetPath.string() << '\n';
         return assetPath;
     }
 
@@ -67,10 +72,12 @@ std::filesystem::path FileSystem::resolveAssetPath(const std::filesystem::path& 
     {
         if (std::filesystem::exists(candidate))
         {
+            std::cout << "[fs] resolve asset " << assetPath.string() << " -> " << candidate.string() << '\n';
             return candidate;
         }
     }
 
+    std::cout << "[fs] missing asset " << assetPath.string() << '\n';
     return {};
 }
 }

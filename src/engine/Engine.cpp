@@ -172,6 +172,18 @@ void Engine::frame()
         running_ = renderer_.renderFrame();
     }
 
+    Renderer::MapChangeRequest transition;
+    if (running_ && renderer_.takeMapChangeRequest(transition))
+    {
+        if (!currentMapName_.empty())
+        {
+            mapRuntimeStates_[currentMapName_] = renderer_.captureMapRuntimeState();
+            std::cout << "[map] saved runtime state for " << currentMapName_ << '\n';
+        }
+        pendingMapTransition_ = transition;
+        console_.execute("map " + transition.mapName);
+    }
+
     if ((frameNumber_ % 300) == 0)
     {
         std::cout << "frame " << frameNumber_ << '\n';
@@ -201,6 +213,15 @@ void Engine::registerBuiltins()
         running_ = false;
     });
 
+    console_.registerCommand("changelevel", [this](const std::vector<std::string>& args) {
+        if (args.size() < 2)
+        {
+            std::cout << "usage: changelevel <map> <landmark>\n";
+            return;
+        }
+        renderer_.requestMapChangeTo(args[0], args[1]);
+    });
+
     console_.registerCommand("map", [this](const std::vector<std::string>& args) {
         if (args.empty())
         {
@@ -217,17 +238,38 @@ void Engine::registerBuiltins()
         }
 
         std::string error;
-        if (!loadedMap_.load(mapPath, error))
+        BspMap nextMap;
+        if (!nextMap.load(mapPath, error))
         {
             std::cout << "map load failed: " << error << '\n';
+            pendingMapTransition_.reset();
             return;
         }
+
+        renderer_.beginMapLoad();
+        soundSystem_.stopMapSounds();
+        loadedMap_ = std::move(nextMap);
 
         const BspMapSummary& summary = loadedMap_.summary();
         renderer_.setCollisionMap(&loadedMap_);
         renderer_.setWorldFaces(loadedMap_.renderFaces());
         renderer_.setMapEntities(loadedMap_.entities(), loadedMap_.brushModels());
         renderer_.setEntityMarkers(loadedMap_.entityMarkers());
+
+        const std::string loadedMapName = normalizeTextureName(args.front());
+        const bool isTransitionLoad = pendingMapTransition_ &&
+                                      normalizeTextureName(pendingMapTransition_->mapName) == loadedMapName;
+        if (isTransitionLoad)
+        {
+            const auto savedState = mapRuntimeStates_.find(loadedMapName);
+            if (savedState != mapRuntimeStates_.end())
+            {
+                renderer_.restoreMapRuntimeState(savedState->second);
+            }
+            renderer_.applyMapTransition(*pendingMapTransition_);
+            pendingMapTransition_.reset();
+        }
+        currentMapName_ = loadedMapName;
 
         std::size_t pointEntityCount = 0;
         std::size_t brushEntityCount = 0;
@@ -325,6 +367,14 @@ void Engine::registerBuiltins()
                     continue;
                 }
 
+                std::cout << "[asset] loaded model " << normalizedModelPath
+                          << " -> " << modelPath.string()
+                          << " body=" << body
+                          << " skin=" << skin
+                          << " seq=" << sequence
+                          << " textures=" << model.textures.size()
+                          << " frames=" << model.frames.size() << '\n';
+
                 StudioModelSceneEntry entry;
                 entry.model = std::move(model);
                 studioModelIndices[normalizedKey] = studioModels.size();
@@ -340,6 +390,11 @@ void Engine::registerBuiltins()
             instance.skin = skin;
             instance.sequence = sequence;
             studioModels[existing->second].instances.push_back(std::move(instance));
+            std::cout << "[entity] model instance class=" << marker.className
+                      << " model=" << normalizedModelPath
+                      << " origin=" << marker.origin.x << ',' << marker.origin.y << ',' << marker.origin.z
+                      << " mapAngles=" << marker.angles.x << ',' << marker.angles.y << ',' << marker.angles.z
+                      << " renderYaw=" << marker.angles.y << '\n';
         }
         const std::size_t studioModelInstanceCount = [&studioModels]() {
             std::size_t count = 0;
@@ -376,7 +431,7 @@ void Engine::registerBuiltins()
                 ++translucentFaceCount;
             }
 
-            if (face.textureName.empty() || face.sky)
+            if (face.textureName.empty() || face.sky || !face.visible)
             {
                 continue;
             }
@@ -406,6 +461,8 @@ void Engine::registerBuiltins()
                 continue;
             }
 
+            std::cout << "[asset] loaded WAD " << wadPath.string()
+                      << " -> " << resolvedWadPath.string() << '\n';
             wads.push_back(std::move(wad));
         }
 
@@ -420,6 +477,8 @@ void Engine::registerBuiltins()
                 if (wad.findTexture(textureName, image, textureError))
                 {
                     loadedTextureNames.insert(normalizeTextureName(textureName));
+                    std::cout << "[asset] loaded texture " << textureName
+                              << " " << image.width << 'x' << image.height << '\n';
                     textures.push_back(std::move(image));
                     break;
                 }
